@@ -1,0 +1,14 @@
+target/
+*.class
+.idea/
+.vscode/
+*.iml
+
+.env
+**/.env
+
+
+target/
+**/target/
+node_modules/
+

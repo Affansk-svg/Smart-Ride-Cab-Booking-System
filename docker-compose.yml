@@ -1,0 +1,55 @@
+x-svc-env: &svc-env
+  DB_USER: root
+  DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  JWT_SECRET: ${JWT_SECRET}
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports: ["3307:3306"]
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  user-service:
+    build: ./user-service
+    depends_on: { mysql: { condition: service_healthy } }
+    ports: ["8081:8081"]
+    restart: on-failure
+    environment:
+      <<: *svc-env
+      DB_URL: jdbc:mysql://mysql:3306/user_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+
+  ride-service:
+    build: ./ride-service
+    depends_on: { mysql: { condition: service_healthy } }
+    ports: ["8082:8082"]
+    restart: on-failure
+    environment:
+      <<: *svc-env
+      DB_URL: jdbc:mysql://mysql:3306/ride_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+
+  payment-service:
+    build: ./payment-service
+    depends_on:
+      mysql: { condition: service_healthy }
+      ride-service: { condition: service_started }
+    ports: ["8083:8083"]
+    restart: on-failure
+    environment:
+      <<: *svc-env
+      DB_URL: jdbc:mysql://mysql:3306/payment_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      RIDE_SERVICE_URL: http://ride-service:8082
+
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    depends_on: [user-service, ride-service, payment-service]
+
+volumes:
+  mysql_data:
